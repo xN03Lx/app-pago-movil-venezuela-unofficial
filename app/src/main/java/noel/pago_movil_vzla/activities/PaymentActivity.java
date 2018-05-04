@@ -1,6 +1,14 @@
 package noel.pago_movil_vzla.activities;
 
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
+import android.provider.Settings;
+import android.support.annotation.NonNull;
 import android.support.design.widget.TextInputLayout;
+import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.text.Editable;
@@ -26,6 +34,9 @@ public class PaymentActivity extends AppCompatActivity {
     private EditText inputDni, inputNumber, inputMount;
     private TextInputLayout inputLayoutDni, inputLayoutNumber, inputLayoutMount;
     private Button btnPaid;
+    private String smsMessage;
+
+    private final int SMS_SEND_CODE = 100;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -81,9 +92,103 @@ public class PaymentActivity extends AppCompatActivity {
                 String phoneNumber = inputNumber.getText().toString();
                 String mount = inputMount.getText().toString();
                 String dni = inputDni.getText().toString();
-                Toast.makeText(PaymentActivity.this,  "cod de banco:" + codeBank +" Number: " + codNumber + phoneNumber+ " cedula: " + dni + " Monto: "+ mount, Toast.LENGTH_SHORT).show();
+                smsMessage = "PAGAR " + codeBank + " " + codNumber+phoneNumber+ " " + dni + " " + mount;
+
+                //validacion inputs
+                if(codNumber != null &&  !codNumber.isEmpty() && phoneNumber != null && !phoneNumber.isEmpty()
+                && mount != null &&  !mount.isEmpty() && dni != null && !dni.isEmpty()){
+                    //comprobar version actual de android que estamos corriendo
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+
+                        if (CheckPermission(Manifest.permission.SEND_SMS)){ //Acepto el permiso
+                            if (ActivityCompat.checkSelfPermission(PaymentActivity.this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) return;
+                            Intent smsIntent = new Intent(Intent.ACTION_VIEW);
+                            smsIntent.setType("vnd.android-dir/mms-sms");
+                            smsIntent.putExtra("address", "2662");
+                            smsIntent.putExtra("sms_body", smsMessage);
+                            startActivity(smsIntent);
+
+                        }else {
+                            if (shouldShowRequestPermissionRationale(Manifest.permission.SEND_SMS)){  //No se le ha preguntado aun el permiso
+
+                                requestPermissions(new String[]{Manifest.permission.SEND_SMS}, SMS_SEND_CODE);
+
+                            }else {
+                                //ha denagado el permiso
+                                Toast.makeText(PaymentActivity.this,  "Por favor establesca el permiso requerido!", Toast.LENGTH_LONG).show();
+                                Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                                i.addCategory(Intent.CATEGORY_DEFAULT);
+                                i.setData(Uri.parse("package" + getPackageName()));
+                                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                i.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+                                i.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
+                                startActivity(i);
+
+                            }
+                        }
+
+                    }else {
+                        OlderVersions();
+                    }
+
+                }else{
+                    Toast.makeText(PaymentActivity.this,  "Los campos no pueden estar vacios!", Toast.LENGTH_SHORT).show();
+                }
+                //Toast.makeText(PaymentActivity.this,  "cod de banco:" + codeBank +" Number: " + codNumber + phoneNumber+ " cedula: " + dni + " Monto: "+ mount, Toast.LENGTH_SHORT).show();
+            }
+
+            // Metodo las versiones menores a 6
+            private void OlderVersions(){
+                Intent smsIntent = new Intent(Intent.ACTION_VIEW);
+                if (CheckPermission(Manifest.permission.SEND_SMS)){
+                    smsIntent.setType("vnd.android-dir/mms-sms");
+                    smsIntent.putExtra("address", "2662");
+                    smsIntent.putExtra("sms_body", smsMessage);
+                    startActivity(smsIntent);
+                } else {
+                    Toast.makeText(PaymentActivity.this, "Usted declino el permiso para enviar sms", Toast.LENGTH_SHORT).show();
+                }
+
             }
         });
 
+    }
+
+    //Metodo para comprobar permiso en la nuevas versiones
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        //comprobacion de permisos
+        switch (requestCode){
+            case SMS_SEND_CODE:
+                String permission = permissions[0];
+                int result = grantResults[0];
+
+                if (permission.equals(Manifest.permission.SEND_SMS)){
+                    //comprobacion de estado del permiso
+                    if (result == PackageManager.PERMISSION_GRANTED){
+
+                        Intent smsIntent = new Intent(Intent.ACTION_VIEW);
+                        smsIntent.setType("vnd.android-dir/mms-sms");
+                        smsIntent.putExtra("address", "2662");
+                        smsIntent.putExtra("sms_body", smsMessage);
+                        startActivity(smsIntent);
+
+                    }else {
+                        Toast.makeText(PaymentActivity.this, "Usted ha declinado el permiso de enviar sms", Toast.LENGTH_SHORT).show();
+                    }
+                }
+                break;
+            default:
+                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                break;
+
+        }
+
+    }
+
+    //Comprobar si tenemos un permiso
+    private boolean CheckPermission(String permission){
+        int result = this.checkCallingOrSelfPermission(permission);
+        return result == PackageManager.PERMISSION_GRANTED;
     }
 }
